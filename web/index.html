@@ -41,7 +41,7 @@
       <div class="row-btns">
         <button class="btn primary grow" id="btnFix">
           <span class="spin" id="fixSpin" hidden></span>
-          <span id="fixLabel">一键修复</span>
+          <span id="fixLabel">一键连接</span>
         </button>
         <button class="btn" id="btnRefresh">刷新</button>
       </div>
@@ -76,8 +76,7 @@
       <div class="card">
         <div class="card-row">
           <div class="card-label">
-            <b>自动守护</b>
-            <small>掉线时自动完成「注销僵尸会话 → 选运营商 → 认证」</small>
+            <b>自动连接</b>
           </div>
           <label class="switch">
             <input type="checkbox" id="watchToggle">
@@ -89,7 +88,7 @@
             <input class="num" id="watchInterval" type="number" min="5" max="3600" value="30">
             秒检查</span>
           <span>已检查 <b id="wChecks">0</b></span>
-          <span>已修复 <b id="wFixes">0</b></span>
+          <span>已恢复 <b id="wFixes">0</b></span>
           <span>最近 <b id="wLast">—</b></span>
         </div>
       </div>
@@ -114,8 +113,8 @@
     <section class="pane" data-pane="settings">
       <form id="cfgForm" autocomplete="off">
         <label class="field">
-          <span>学号 / 用户名</span>
-          <input id="fUser" type="text" placeholder="如 ad57361477" autocomplete="username">
+          <span>用户名</span>
+          <input id="fUser" type="text" placeholder="如 adxxxxxxxx" autocomplete="username">
         </label>
 
         <label class="field">
@@ -125,18 +124,7 @@
 
         <label class="field">
           <span>出口运营商</span>
-          <input id="fChannel" type="text" list="channels" placeholder="中国电信">
-          <datalist id="channels">
-            <option value="校园网"></option>
-            <option value="中国移动"></option>
-            <option value="中国电信"></option>
-            <option value="中国联通"></option>
-          </datalist>
-        </label>
-
-        <label class="field">
-          <span>守护间隔（秒）</span>
-          <input id="fInterval" type="number" min="5" max="3600" value="30">
+          <select id="fChannel"></select>
         </label>
 
         <div class="card-row compact">
@@ -161,7 +149,7 @@
       <div class="row-btns">
         <button class="btn ghost grow" id="btnQuit">退出程序</button>
       </div>
-      <p class="hint">关闭窗口只会收进托盘，后台守护继续运行；真正退出点上面的按钮或托盘菜单。</p>
+      <p class="hint">关闭窗口只会收进托盘，后台继续运行；真正退出点上面的按钮或托盘菜单。</p>
     </section>
 
   </main>

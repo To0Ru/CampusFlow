@@ -1,4 +1,4 @@
-//! 修复编排 + 状态采集。
+//! 连接编排 + 状态采集。
 
 use std::thread::sleep;
 use std::time::Duration;

@@ -153,12 +153,12 @@ pub async fn do_fix(state: State<'_, AppState>) -> Result<ActionResult, String> 
             return ActionResult::new(false, "还没配置账号密码，请先在「设置」里填好");
         }
 
-        inner.bus.push("[..] ── 开始手动修复 ──");
+        inner.bus.push("[..] ── 开始手动连接 ──");
         let sink = inner.bus.sink();
         let ok = fixer::fix(&cfg, &sink);
         release(&inner);
 
-        ActionResult::new(ok, if ok { "修复成功" } else { "修复失败，看日志" })
+        ActionResult::new(ok, if ok { "连接成功" } else { "连接失败，看日志" })
     })
     .await
     .map_err(|e| e.to_string())
@@ -336,7 +336,7 @@ pub async fn save_config(
             let v = v.clamp(5, 3600);
             if v != cfg.watch_interval {
                 cfg.watch_interval = v;
-                changed.push("守护间隔");
+                changed.push("检查间隔");
             }
         }
         if let Some(v) = patch.autostart {
@@ -398,35 +398,55 @@ pub async fn watch_control(
     interval: Option<u64>,
 ) -> Result<ActionResult, String> {
     let inner = Arc::clone(&state.0);
-    tauri::async_runtime::spawn_blocking(move || match action.as_str() {
-        "start" => {
-            if watcher_running(&inner) {
-                return ActionResult::new(true, "守护已在运行");
+    tauri::async_runtime::spawn_blocking(move || {
+        let new_iv = interval.map(|v| v.clamp(5, 3600));
+
+        // 不管哪个动作，先把间隔落盘
+        if let Some(iv) = new_iv {
+            let snapshot = if let Ok(mut c) = inner.cfg.lock() {
+                c.watch_interval = iv;
+                Some((*c).clone())
+            } else {
+                None
+            };
+            if let Some(cfg) = snapshot {
+                let _ = config::save(&cfg);
             }
-            if let Some(iv) = interval {
-                let iv = iv.clamp(5, 3600);
-                let snapshot = if let Ok(mut c) = inner.cfg.lock() {
-                    c.watch_interval = iv;
-                    Some((*c).clone())
+        }
+
+        match action.as_str() {
+            "start" => {
+                if watcher_running(&inner) {
+                    let cur = inner.watcher_state.lock().map(|s| s.interval).unwrap_or(0);
+                    if new_iv.is_none() || new_iv == Some(cur) {
+                        return ActionResult::new(true, "自动连接已在运行");
+                    }
+                    stop_watcher(&inner);
+                    inner.bus.push("[..] 检查间隔变了，自动连接重启中…");
+                }
+                start_watcher(&inner);
+                ActionResult::new(true, "自动连接已启动")
+            }
+            "stop" => {
+                if !watcher_running(&inner) {
+                    return ActionResult::new(true, "自动连接本来就没开");
+                }
+                stop_watcher(&inner);
+                inner.bus.push("[..] 自动连接已停止");
+                ActionResult::new(true, "自动连接已停止")
+            }
+            // 只改间隔：没在跑就单纯存下配置，在跑就重启让它生效
+            "set" => {
+                if watcher_running(&inner) {
+                    stop_watcher(&inner);
+                    start_watcher(&inner);
+                    ActionResult::new(true, format!("检查间隔已改为 {} 秒", new_iv.unwrap_or(30)))
                 } else {
-                    None
-                };
-                if let Some(cfg) = snapshot {
-                    let _ = config::save(&cfg);
+                    ActionResult::new(true, "已保存")
                 }
             }
-            start_watcher(&inner);
-            ActionResult::new(true, "守护已启动")
+            _ => ActionResult::new(false, "action 必须是 start / stop / set"),
         }
-        "stop" => {
-            if !watcher_running(&inner) {
-                return ActionResult::new(true, "守护本来就没开");
-            }
-            stop_watcher(&inner);
-            inner.bus.push("[..] 守护已停止");
-            ActionResult::new(true, "守护已停止")
-        }
-        _ => ActionResult::new(false, "action 必须是 start 或 stop"),
     })
     .await
     .map_err(|e| e.to_string())

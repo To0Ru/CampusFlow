@@ -315,16 +315,33 @@ form { display: flex; flex-direction: column; gap: 11px; flex: 0 0 auto; }
 .field { display: flex; flex-direction: column; gap: 5px; }
 .field > span { font-size: 11.5px; color: var(--fg-dim); }
 .field em { font-style: normal; color: var(--fg-faint); font-size: 11px; }
-.field input {
+.field input,
+.field select {
   font: inherit; font-size: 13px;
   background: var(--card); color: var(--fg);
   border: 1px solid var(--line); border-radius: var(--rs);
   padding: 8px 11px; width: 100%;
   transition: border-color .18s, box-shadow .18s;
 }
-.field input:focus {
+.field input:focus,
+.field select:focus {
   outline: none; border-color: var(--accent);
   box-shadow: 0 0 0 3px rgba(79,140,255,.14);
+}
+
+/* 运营商下拉：去掉系统原生外观，自画箭头，深色模式下才一致 */
+.field select {
+  appearance: none;
+  -webkit-appearance: none;
+  cursor: pointer;
+  padding-right: 30px;
+  background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%2393a0b3' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 11px center;
+}
+.field select option {
+  background: var(--card);
+  color: var(--fg);
 }
 .form-msg { font-size: 11.5px; color: var(--fg-dim); min-height: 16px; }
 .form-msg.ok  { color: var(--ok); }

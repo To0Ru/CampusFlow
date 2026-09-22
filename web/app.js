@@ -21,7 +21,7 @@ const el = {
   log: $('log'), autoScroll: $('autoScroll'), btnClearLog: $('btnClearLog'),
 
   cfgForm: $('cfgForm'), fUser: $('fUser'), fPass: $('fPass'),
-  fChannel: $('fChannel'), fInterval: $('fInterval'), fAutostart: $('fAutostart'),
+  fChannel: $('fChannel'), fAutostart: $('fAutostart'),
   cfgMsg: $('cfgMsg'), pwdNote: $('pwdNote'), about: $('about'),
 
   toast: $('toast'), tabs: $('tabs'),
@@ -64,7 +64,7 @@ function setBusy(on, label) {
   el.btnRefresh.disabled = on;
   el.btnLogout.disabled = on;
   el.fixSpin.hidden = !on;
-  el.fixLabel.textContent = on ? (label || '处理中…') : '一键修复';
+  el.fixLabel.textContent = on ? (label || '处理中…') : '一键连接';
   if (on) {
     el.hero.className = 'hero is-busy';
     el.heroTitle.textContent = label || '处理中…';
@@ -102,7 +102,7 @@ function renderStatus(s) {
   el.vPortal.textContent = st === 'on' ? '在线' : st === 'off' ? '未认证' : '未知';
   el.vPortal.className = 'v ' + (st === 'on' ? 'on' : st === 'off' ? 'off' : '');
 
-  // 守护统计
+  // 自动连接统计
   const w = s.watcher || {};
   el.wChecks.textContent = w.checks ?? 0;
   el.wFixes.textContent = w.fixes ?? 0;
@@ -122,13 +122,13 @@ function renderStatus(s) {
     el.hero.classList.add('is-down');
     el.heroTitle.textContent = '外网不通';
     if (st === 'on') {
-      el.heroSub.textContent = '门户显示在线但实际没网（僵尸会话）· 点「一键修复」';
+      el.heroSub.textContent = '门户显示在线但实际没网（僵尸会话）· 点「一键连接」';
     } else if (!s.ready) {
       el.heroSub.textContent = '还没配置账号密码 · 去「设置」填一下';
     } else if (s.portal_error) {
       el.heroSub.textContent = '门户访问失败：' + s.portal_error;
     } else {
-      el.heroSub.textContent = (s.probe || '需要重新认证') + ' · 点「一键修复」';
+      el.heroSub.textContent = (s.probe || '需要重新认证') + ' · 点「一键连接」';
     }
   }
 }
@@ -171,7 +171,7 @@ async function wireEvents() {
     const ev = e.payload;
     addLog(ev);
     // 认证类日志出现后状态大概率变了，顺手刷新
-    if (/^\[(ok|!!)\]\s*(认证|注销|自动修复|修复|已注销)/.test(ev.msg)) {
+    if (/^\[(ok|!!)\]\s*(认证|注销|自动重连|连接成功|已注销)/.test(ev.msg)) {
       setTimeout(refresh, 400);
     }
   });
@@ -182,12 +182,12 @@ async function wireEvents() {
 /* ------------------------------------------------------------------ */
 
 async function runFix() {
-  setBusy(true, '正在修复…');
+  setBusy(true, '正在连接…');
   try {
     const r = await invoke('do_fix');
     toast(r.msg, r.ok ? 'ok' : 'err');
   } catch (e) {
-    toast('修复失败：' + e, 'err');
+    toast('连接失败：' + e, 'err');
   } finally {
     setBusy(false);
     refresh();
@@ -209,6 +209,27 @@ async function runLogout() {
 }
 
 /* ------------------------------------------------------------------ */
+/* 运营商下拉                                                          */
+/* ------------------------------------------------------------------ */
+
+// 门户返回的固定四个出口。配置里如果存着列表外的值（比如学校以后加了新运营商），
+// 也把它补进去，不会静默丢掉。
+const CHANNELS = ['校园网', '中国移动', '中国电信', '中国联通'];
+
+function fillChannels(current) {
+  const list = CHANNELS.slice();
+  if (current && !list.includes(current)) list.push(current);
+  el.fChannel.innerHTML = '';
+  for (const name of list) {
+    const o = document.createElement('option');
+    o.value = name;
+    o.textContent = name;
+    el.fChannel.appendChild(o);
+  }
+  el.fChannel.value = current || '中国电信';
+}
+
+/* ------------------------------------------------------------------ */
 /* 配置                                                                */
 /* ------------------------------------------------------------------ */
 
@@ -217,8 +238,7 @@ async function loadConfig() {
     const c = await invoke('get_config');
     portalURL = c.portal || portalURL;
     el.fUser.value = c.username || '';
-    el.fChannel.value = c.channel || '';
-    el.fInterval.value = c.interval || 30;
+    fillChannels(c.channel);
     el.watchInterval.value = c.interval || 30;
     el.fAutostart.checked = !!c.autostart;
     el.pwdNote.textContent = c.has_password ? '(已保存)' : '(未设置)';
@@ -249,8 +269,7 @@ async function saveConfig(e) {
   e.preventDefault();
   const patch = {
     username: el.fUser.value.trim(),
-    channel: el.fChannel.value.trim(),
-    interval: parseInt(el.fInterval.value, 10) || 30,
+    channel: el.fChannel.value,
     autostart: el.fAutostart.checked,
   };
   if (el.fPass.value) patch.password = el.fPass.value;
@@ -289,7 +308,7 @@ el.btnPortal.addEventListener('click', async () => {
 });
 
 el.btnQuit.addEventListener('click', async () => {
-  if (confirm('确认退出 CampusFlow？退出后自动守护也会停止。')) {
+  if (confirm('确认退出 CampusFlow？退出后自动连接也会停止。')) {
     await invoke('quit_app');
   }
 });
@@ -316,11 +335,14 @@ el.watchToggle.addEventListener('change', async () => {
 
 el.watchInterval.addEventListener('change', async () => {
   const interval = parseInt(el.watchInterval.value, 10) || 30;
-  if (el.watchToggle.checked) {
-    await invoke('watch_control', { action: 'start', interval });
-    toast('守护间隔已改为 ' + interval + ' 秒', 'ok');
-    setTimeout(refresh, 400);
+  try {
+    // action=set：没在跑就只存配置，在跑就重启让它生效
+    const r = await invoke('watch_control', { action: 'set', interval });
+    toast(r.msg, r.ok ? 'ok' : 'err');
+  } catch (e) {
+    toast('设置失败：' + e, 'err');
   }
+  setTimeout(refresh, 400);
 });
 
 document.addEventListener('keydown', (e) => {
@@ -356,6 +378,6 @@ document.addEventListener('keydown', (e) => {
   await loadConfig();
   await refresh();
 
-  // 兜底轮询：守护线程在后台改了状态，界面也能跟上
+  // 兜底轮询：后台线程改了状态，界面也能跟上
   setInterval(refresh, 15000);
 })();

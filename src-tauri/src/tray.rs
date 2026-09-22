@@ -14,7 +14,7 @@ use crate::{fixer, Inner};
 /// 在 Tauri v2 里丢下这个句柄，托盘图标会跟着消失。
 pub fn build(app: &tauri::App, inner: Arc<Inner>) -> tauri::Result<TrayIcon> {
     let show = MenuItem::with_id(app, "show", "显示窗口", true, None::<&str>)?;
-    let fix = MenuItem::with_id(app, "fix", "一键修复", true, None::<&str>)?;
+    let fix = MenuItem::with_id(app, "fix", "一键连接", true, None::<&str>)?;
     let sep = PredefinedMenuItem::separator(app)?;
     let quit = MenuItem::with_id(app, "quit", "退出", true, None::<&str>)?;
     let menu = Menu::with_items(app, &[&show, &fix, &sep, &quit])?;
@@ -39,7 +39,7 @@ pub fn build(app: &tauri::App, inner: Arc<Inner>) -> tauri::Result<TrayIcon> {
                         inner.bus.push("[!!] 还没配置账号密码");
                         return;
                     }
-                    inner.bus.push("[..] ── 托盘触发修复 ──");
+                    inner.bus.push("[..] ── 托盘触发连接 ──");
                     let sink = inner.bus.sink();
                     fixer::fix(&cfg, &sink);
                 });

@@ -1,11 +1,11 @@
 //! 配置读写。
 //!
-//! 落地位置优先选 **exe 同级目录**（便携模式），写不进去才退回 %APPDATA%。
-//! 这样绿色版能带着 config.json 走，而装到 Program Files 的版本也不会因为
-//! 没有写权限而崩。
+//! 统一放在 `%APPDATA%\CampusFlow\config.json`。
+//! 不放在 exe 同级目录：安装在 Program Files 时写不进去，
+//! 而且卸载时会被一起删掉。
 
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
@@ -59,37 +59,15 @@ impl Config {
 }
 
 pub fn config_path() -> PathBuf {
-    if let Some(dir) = exe_dir() {
-        if is_writable(&dir) {
-            return dir.join("config.json");
-        }
-    }
     let dir = appdata_dir().join("CampusFlow");
     let _ = fs::create_dir_all(&dir);
     dir.join("config.json")
-}
-
-fn exe_dir() -> Option<PathBuf> {
-    std::env::current_exe()
-        .ok()?
-        .parent()
-        .map(Path::to_path_buf)
 }
 
 fn appdata_dir() -> PathBuf {
     std::env::var_os("APPDATA")
         .map(PathBuf::from)
         .unwrap_or_else(std::env::temp_dir)
-}
-
-fn is_writable(dir: &Path) -> bool {
-    let probe = dir.join(".campusflow_write_probe");
-    if fs::write(&probe, b"").is_ok() {
-        let _ = fs::remove_file(&probe);
-        true
-    } else {
-        false
-    }
 }
 
 pub fn load() -> Config {

@@ -1,4 +1,4 @@
-//! 后台守护线程：定时探测，掉线自动修复。
+//! 后台自动连接线程：定时探测，掉线自动重连。
 
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
@@ -54,7 +54,7 @@ impl Watcher {
         }
 
         let handle = thread::spawn(move || {
-            log(&format!("[..] 自动守护已启动，每 {interval}s 检查一次"));
+            log(&format!("[..] 自动连接已启动，每 {interval}s 检查一次"));
 
             while !stop_inner.load(Ordering::Relaxed) {
                 let (ok, why) = net::check_internet();
@@ -66,7 +66,7 @@ impl Watcher {
                 }
 
                 if !ok {
-                    log(&format!("[..] 检测到掉线（{why}），开始修复…"));
+                    log(&format!("[..] 检测到掉线（{why}），开始重连…"));
                     let good = fixer::fix(&cfg, &log);
                     if let Ok(mut s) = state.lock() {
                         if good {
@@ -74,9 +74,9 @@ impl Watcher {
                         }
                     }
                     if good {
-                        log("[ok] 自动修复成功");
+                        log("[ok] 自动重连成功");
                     } else {
-                        log("[!!] 自动修复失败，稍后重试");
+                        log("[!!] 自动重连失败，稍后重试");
                     }
                 }
 
