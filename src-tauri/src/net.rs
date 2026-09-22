@@ -52,32 +52,46 @@ pub fn check_internet() -> (bool, String) {
             .redirects(0)
             .build();
 
-        match agent.get(probe.url).set("User-Agent", USER_AGENT).call() {
-            Ok(resp) => {
-                let code = resp.status();
-                if code != probe.want {
-                    fails.push(format!("{host}: HTTP {code}（疑似门户劫持）"));
-                    continue;
-                }
-                // 光看状态码不够：门户劫持后往往也是 200，得验正文
-                if let Some(needle) = probe.needle {
-                    let mut body = String::new();
-                    let _ = resp.into_reader().take(8192).read_to_string(&mut body);
-                    if !body.to_ascii_lowercase().contains(&needle.to_ascii_lowercase()) {
-                        fails.push(format!("{host}: 内容异常（疑似门户劫持）"));
-                        continue;
-                    }
-                }
+        let sent = agent.get(probe.url).set("User-Agent", USER_AGENT).call();
+
+        // ureq 对 3xx 的处理会随配置变化：redirects(0) 时 302 有可能走 Ok，
+        // 也有可能包在 Err(Status) 里。两个分支合并处理，免得再踩一次。
+        let resp = match sent {
+            Ok(r) => r,
+            Err(ureq::Error::Status(_, r)) => r,
+            Err(e) => {
+                fails.push(format!("{host}: {}", crate::portal::short(e)));
+                continue;
+            }
+        };
+
+        let code = resp.status();
+
+        // 3xx：不是看状态码，是看它跳去哪
+        if (300..400).contains(&code) {
+            if is_benign_redirect(probe, &resp, host) {
                 return (true, host.to_string());
             }
-            Err(ureq::Error::Status(code, resp)) => {
-                if is_benign_redirect(probe, &resp, host) {
-                    return (true, host.to_string());
-                }
-                fails.push(format!("{host}: HTTP {code}（疑似门户劫持）"));
-            }
-            Err(e) => fails.push(format!("{host}: {}", crate::portal::short(e))),
+            let loc = resp.header("Location").unwrap_or("(无 Location)");
+            fails.push(format!("{host}: HTTP {code} → {loc}（疑似门户劫持）"));
+            continue;
         }
+
+        if code != probe.want {
+            fails.push(format!("{host}: HTTP {code}（疑似门户劫持）"));
+            continue;
+        }
+
+        // 光看状态码不够：门户劫持后往往也是 200，得验正文
+        if let Some(needle) = probe.needle {
+            let mut body = String::new();
+            let _ = resp.into_reader().take(8192).read_to_string(&mut body);
+            if !body.to_ascii_lowercase().contains(&needle.to_ascii_lowercase()) {
+                fails.push(format!("{host}: 内容异常（疑似门户劫持）"));
+                continue;
+            }
+        }
+        return (true, host.to_string());
     }
 
     (
