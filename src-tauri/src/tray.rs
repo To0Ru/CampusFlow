@@ -6,9 +6,8 @@ use std::sync::Arc;
 
 use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIcon, TrayIconBuilder, TrayIconEvent};
-use tauri::{AppHandle, Manager};
 
-use crate::{fixer, Inner};
+use crate::{fixer, window, Inner};
 
 /// 返回 `TrayIcon` 句柄，调用方**必须存住它**。
 /// 在 Tauri v2 里丢下这个句柄，托盘图标会跟着消失。
@@ -26,7 +25,10 @@ pub fn build(app: &tauri::App, inner: Arc<Inner>) -> tauri::Result<TrayIcon> {
         .menu(&menu)
         .show_menu_on_left_click(false)
         .on_menu_event(move |app, event| match event.id.as_ref() {
-            "show" => show_window(app),
+            // 窗口可能是被销毁过的（关闭 = 销毁以释放 WebView2），所以统一走 ensure
+            "show" => {
+                let _ = window::ensure(app);
+            }
             "fix" => {
                 let inner = Arc::clone(&inner_for_menu);
                 std::thread::spawn(move || {
@@ -54,7 +56,7 @@ pub fn build(app: &tauri::App, inner: Arc<Inner>) -> tauri::Result<TrayIcon> {
                 ..
             } = event
             {
-                show_window(tray.app_handle());
+                let _ = window::ensure(tray.app_handle());
             }
         });
 
@@ -64,12 +66,4 @@ pub fn build(app: &tauri::App, inner: Arc<Inner>) -> tauri::Result<TrayIcon> {
 
     let icon = builder.build(app)?;
     Ok(icon)
-}
-
-fn show_window(app: &AppHandle) {
-    if let Some(w) = app.get_webview_window("main") {
-        let _ = w.show();
-        let _ = w.unminimize();
-        let _ = w.set_focus();
-    }
 }

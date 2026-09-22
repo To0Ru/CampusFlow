@@ -13,6 +13,15 @@ pub const DEFAULT_PORTAL: &str = "http://10.102.250.36";
 pub const DEFAULT_PROFILE: &str = "iFudan.stu";
 pub const DEFAULT_CHANNEL: &str = "中国电信";
 
+/// 检查方式
+pub const MODE_EVENT: &str = "event";
+pub const MODE_POLL: &str = "poll";
+
+/// 启动检查：等这个校园网 SSID 出现，最多等多久（秒）
+pub const STARTUP_SSID_WAIT_SECS: u64 = 60;
+/// 启动检查的 SSID 轮询间隔（毫秒）
+pub const STARTUP_SSID_POLL_MS: u64 = 2500;
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Config {
@@ -23,6 +32,11 @@ pub struct Config {
     pub portal: String,
     pub profile: String,
     pub watch_interval: u64,
+    /// "event" = 网络变化时检查；"poll" = 定时轮询
+    pub check_mode: String,
+    /// 「自动重连」开关的状态。
+    /// 不持久化的话重启就回到关闭，开机自启等于白搭。
+    pub auto_watch: bool,
     /// relogin = 僵尸会话先注销再认证；login_only = 只认证不注销
     pub on_stale_session: String,
     pub autostart: bool,
@@ -37,6 +51,8 @@ impl Default for Config {
             portal: DEFAULT_PORTAL.to_string(),
             profile: DEFAULT_PROFILE.to_string(),
             watch_interval: 30,
+            check_mode: MODE_EVENT.to_string(),
+            auto_watch: false,
             on_stale_session: "relogin".to_string(),
             autostart: false,
         }
@@ -54,6 +70,15 @@ impl Config {
             DEFAULT_CHANNEL
         } else {
             c
+        }
+    }
+
+    /// 归一化检查方式。字段里写了别的值一律当 event。
+    pub fn mode(&self) -> &'static str {
+        if self.check_mode.eq_ignore_ascii_case(MODE_POLL) {
+            MODE_POLL
+        } else {
+            MODE_EVENT
         }
     }
 }

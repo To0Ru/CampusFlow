@@ -83,8 +83,18 @@
             <i></i>
           </label>
         </div>
+
+        <div class="card-row compact">
+          <div class="card-label"><b>检查方式</b></div>
+          <select id="checkMode" class="mini-select">
+            <option value="event">网络变化时检查</option>
+            <option value="poll">定时轮询</option>
+          </select>
+        </div>
+        <p class="hint" id="modeHint"></p>
+
         <div class="card-foot">
-          <span>每
+          <span id="intervalWrap">每
             <input class="num" id="watchInterval" type="number" min="5" max="3600" value="30">
             秒检查</span>
           <span>已检查 <b id="wChecks">0</b></span>

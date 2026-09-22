@@ -1,5 +1,6 @@
 //! 连接编排 + 状态采集。
 
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread::sleep;
 use std::time::Duration;
 
@@ -10,6 +11,17 @@ use crate::logbus::LogSink;
 use crate::net;
 use crate::portal::{LoginOutcome, Portal};
 use crate::watcher::WatcherState;
+
+/// 认证类操作（启动检查 / 后台守护 / 手动一键连接）同一时刻只允许一个，
+/// 否则两个线程可能同时跑“注销 + 认证”，互相把对方的会话搞掉。
+pub fn try_acquire(busy: &AtomicBool) -> bool {
+    busy.compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
+        .is_ok()
+}
+
+pub fn release(busy: &AtomicBool) {
+    busy.store(false, Ordering::SeqCst);
+}
 
 /// 把网络修好，返回最终是否能上网。
 ///

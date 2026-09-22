@@ -260,6 +260,26 @@ main {
   border-radius: 5px; padding: 1px 4px;
 }
 
+/* 卡片里的小号下拉（检查方式） */
+.mini-select {
+  font: inherit; font-size: 12px;
+  background: var(--card-2); color: var(--fg);
+  border: 1px solid var(--line); border-radius: 6px;
+  padding: 4px 24px 4px 9px;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%2393a0b3' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+}
+.mini-select:focus {
+  outline: none; border-color: var(--accent);
+}
+.mini-select option { background: var(--card); color: var(--fg); }
+
+.card-row.compact .card-label b { font-size: 12px; font-weight: 600; }
+
 /* ---------------- 开关 ---------------- */
 .switch { position: relative; width: 40px; height: 23px; flex: 0 0 40px; }
 .switch input { opacity: 0; width: 0; height: 0; }

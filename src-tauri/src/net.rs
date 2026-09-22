@@ -5,6 +5,7 @@
 //! 所以必须校验返回内容，并且不要跟随跳转。
 
 use std::io::Read;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
 use crate::portal::decode_console;
@@ -161,4 +162,46 @@ pub fn wifi_ssid() -> Option<String> {
 #[cfg(not(windows))]
 pub fn wifi_ssid() -> Option<String> {
     None
+}
+
+/// 当前连的 WiFi 是不是目标校园网。
+///
+/// 返回 `None` 表示读不到 SSID（比如 netsh 失败）——这种情况下**不应该拦**，
+/// 否则一个读取失败就会让自动重连彻底趴窝。
+pub fn on_target_ssid(profile: &str) -> Option<bool> {
+    let want = profile.trim();
+    if want.is_empty() {
+        return None;
+    }
+    wifi_ssid().map(|s| s.eq_ignore_ascii_case(want))
+}
+
+/// 等目标 SSID 出现，最多等 `timeout`。
+///
+/// 返回 `true` = 等到了；`false` = 超时或被叫停。
+/// 启动检查用：开机后 WiFi 可能还要好几秒才连上，不等的话第一次认证必然失败。
+pub fn wait_for_ssid(profile: &str, timeout: Duration, stop: &AtomicBool) -> bool {
+    let want = profile.trim();
+    if want.is_empty() {
+        return true;
+    }
+
+    let step = Duration::from_millis(crate::config::STARTUP_SSID_POLL_MS);
+    let mut waited = Duration::ZERO;
+
+    loop {
+        if stop.load(Ordering::Relaxed) {
+            return false;
+        }
+        if let Some(ssid) = wifi_ssid() {
+            if ssid.eq_ignore_ascii_case(want) {
+                return true;
+            }
+        }
+        if waited >= timeout {
+            return false;
+        }
+        std::thread::sleep(step);
+        waited += step;
+    }
 }

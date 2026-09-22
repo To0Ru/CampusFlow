@@ -29,8 +29,10 @@ pub fn set_enabled(enable: bool) -> Result<(), String> {
 
     if enable {
         let exe = std::env::current_exe().map_err(|e| e.to_string())?;
-        // 带引号，路径含空格时 Windows 才能正确解析
-        let value = format!("\"{}\"", exe.display());
+        // 带引号（路径含空格时 Windows 才能正确解析），
+        // 并带上 --tray：开机启动时只进托盘不弹窗。
+        // 用户双击不带这个参数，所以双击永远会出窗口。
+        let value = format!("\"{}\" --tray", exe.display());
 
         let out = std::process::Command::new("reg")
             .args([

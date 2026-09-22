@@ -16,6 +16,7 @@ const el = {
   vIp: $('vIp'), vDuration: $('vDuration'), vBalance: $('vBalance'),
 
   watchToggle: $('watchToggle'), watchInterval: $('watchInterval'),
+  checkMode: $('checkMode'), modeHint: $('modeHint'), intervalWrap: $('intervalWrap'),
   wChecks: $('wChecks'), wFixes: $('wFixes'), wLast: $('wLast'),
 
   log: $('log'), autoScroll: $('autoScroll'), btnClearLog: $('btnClearLog'),
@@ -230,6 +231,22 @@ function fillChannels(current) {
 }
 
 /* ------------------------------------------------------------------ */
+/* 检查方式                                                            */
+/* ------------------------------------------------------------------ */
+
+const MODE_HINT = {
+  event: '换 WiFi、休眠唤醒、插拔网线时立即检查，平时不打扰。'
+       + '注意：校园网会话静默过期（IP 没变）不会触发，这种情况可能漏检。',
+  poll: '每过一段时间主动探测一次，不会漏检，但有周期性网络请求。',
+};
+
+function updateModeUI() {
+  const m = el.checkMode.value;
+  el.modeHint.textContent = MODE_HINT[m] || '';
+  el.intervalWrap.style.display = m === 'poll' ? '' : 'none';
+}
+
+/* ------------------------------------------------------------------ */
 /* 配置                                                                */
 /* ------------------------------------------------------------------ */
 
@@ -239,6 +256,8 @@ async function loadConfig() {
     portalURL = c.portal || portalURL;
     el.fUser.value = c.username || '';
     fillChannels(c.channel);
+    el.checkMode.value = c.check_mode || 'event';
+    updateModeUI();
     el.watchInterval.value = c.interval || 30;
     el.fAutostart.checked = !!c.autostart;
     el.pwdNote.textContent = c.has_password ? '(已保存)' : '(未设置)';
@@ -341,6 +360,19 @@ el.watchInterval.addEventListener('change', async () => {
     toast(r.msg, r.ok ? 'ok' : 'err');
   } catch (e) {
     toast('设置失败：' + e, 'err');
+  }
+  setTimeout(refresh, 400);
+});
+
+el.checkMode.addEventListener('change', async () => {
+  updateModeUI();
+  try {
+    const r = await invoke('save_config', {
+      patch: { check_mode: el.checkMode.value },
+    });
+    toast(r.msg, r.ok ? 'ok' : 'err');
+  } catch (e) {
+    toast('保存失败：' + e, 'err');
   }
   setTimeout(refresh, 400);
 });

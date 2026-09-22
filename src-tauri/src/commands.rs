@@ -3,7 +3,6 @@
 //! 所有会阻塞的操作（HTTP、netsh、sleep）都扔进 `spawn_blocking`，
 //! 否则会把 UI 线程卡死——同步命令在 Tauri 里是跑在主线程上的。
 
-use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
@@ -40,14 +39,11 @@ impl ActionResult {
 
 /// 同一时刻只允许一个认证类操作，避免并发打架。
 fn acquire(inner: &Inner) -> bool {
-    inner
-        .busy
-        .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
-        .is_ok()
+    fixer::try_acquire(&inner.busy)
 }
 
 fn release(inner: &Inner) {
-    inner.busy.store(false, Ordering::SeqCst);
+    fixer::release(&inner.busy);
 }
 
 fn snapshot_cfg(inner: &Inner) -> Config {
@@ -58,15 +54,24 @@ fn snapshot_cfg(inner: &Inner) -> Config {
         .unwrap_or_else(|_| Config::default())
 }
 
+/// 写盘 + 同步内存里的副本。
+fn persist(inner: &Inner, cfg: &Config) -> Result<(), String> {
+    config::save(cfg)?;
+    if let Ok(mut slot) = inner.cfg.lock() {
+        *slot = cfg.clone();
+    }
+    Ok(())
+}
+
 // ---------------------------------------------------------------------- //
 // 守护线程控制
 // ---------------------------------------------------------------------- //
 
-fn watcher_running(inner: &Inner) -> bool {
+pub fn watcher_running(inner: &Inner) -> bool {
     inner.watcher.lock().map(|w| w.is_some()).unwrap_or(false)
 }
 
-fn stop_watcher(inner: &Inner) {
+pub fn stop_watcher(inner: &Inner) {
     if let Ok(mut slot) = inner.watcher.lock() {
         if let Some(mut w) = slot.take() {
             w.stop();
@@ -74,12 +79,17 @@ fn stop_watcher(inner: &Inner) {
     }
 }
 
-fn start_watcher(inner: &Arc<Inner>) {
+/// 启动后台守护（任务 A）。`run_once_first` 决定要不要一上来就查一次。
+pub fn start_watcher(inner: &Arc<Inner>) {
+    start_watcher_with(inner, true);
+}
+
+pub fn start_watcher_with(inner: &Arc<Inner>, run_once_first: bool) {
     let cfg = snapshot_cfg(inner);
-    let interval = cfg.watch_interval;
     let sink = inner.bus.sink();
     let state = Arc::clone(&inner.watcher_state);
-    let w = Watcher::spawn(cfg, sink, interval, state);
+    let busy = Arc::clone(&inner.busy);
+    let w = Watcher::spawn(cfg, sink, state, busy, run_once_first);
     if let Ok(mut slot) = inner.watcher.lock() {
         *slot = Some(w);
     }
@@ -269,6 +279,10 @@ pub struct ConfigView {
     pub username: String,
     pub channel: String,
     pub interval: u64,
+    /// "event" | "poll"
+    pub check_mode: String,
+    /// 「自动重连」开关上次的状态（重启后要恢复）
+    pub auto_watch: bool,
     pub portal: String,
     pub profile: String,
     pub has_password: bool,
@@ -280,11 +294,14 @@ pub fn get_config(state: State<'_, AppState>) -> ConfigView {
     let cfg = snapshot_cfg(&state.0);
     // 先在移走字段前把需要借整个 cfg 的值算出来
     let channel = cfg.channel_or_default().to_string();
+    let mode = cfg.mode().to_string();
     let has_password = !cfg.password.is_empty();
     ConfigView {
         username: cfg.username,
         channel,
         interval: cfg.watch_interval,
+        check_mode: mode,
+        auto_watch: cfg.auto_watch,
         portal: cfg.portal,
         profile: cfg.profile,
         has_password,
@@ -298,6 +315,7 @@ pub struct ConfigPatch {
     pub password: Option<String>,
     pub channel: Option<String>,
     pub interval: Option<u64>,
+    pub check_mode: Option<String>,
     pub autostart: Option<bool>,
 }
 
@@ -339,6 +357,17 @@ pub async fn save_config(
                 changed.push("检查间隔");
             }
         }
+        if let Some(v) = patch.check_mode {
+            let v = if v.eq_ignore_ascii_case(config::MODE_POLL) {
+                config::MODE_POLL
+            } else {
+                config::MODE_EVENT
+            };
+            if v != cfg.check_mode {
+                cfg.check_mode = v.to_string();
+                changed.push("检查方式");
+            }
+        }
         if let Some(v) = patch.autostart {
             if v != cfg.autostart {
                 cfg.autostart = v;
@@ -350,7 +379,7 @@ pub async fn save_config(
             return ActionResult::new(false, "用户名和密码都不能为空");
         }
 
-        if let Err(e) = config::save(&cfg) {
+        if let Err(e) = persist(&inner, &cfg) {
             inner.bus.push(&format!("[!!] 保存配置失败: {e}"));
             return ActionResult::new(false, e);
         }
@@ -361,18 +390,11 @@ pub async fn save_config(
             }
         }
 
-        if let Ok(mut slot) = inner.cfg.lock() {
-            *slot = cfg.clone();
-        }
-
         // 守护线程持有的是启动时的配置副本，改了配置要重启才生效
-        let restart = watcher_running(&inner);
-        if restart {
+        if watcher_running(&inner) {
             stop_watcher(&inner);
-        }
-        if restart {
-            start_watcher(&inner);
-            inner.bus.push("[..] 守护已按新配置重启");
+            start_watcher_with(&inner, true);
+            inner.bus.push("[..] 自动重连已按新配置重启");
         }
 
         let msg = if changed.is_empty() {
@@ -401,21 +423,28 @@ pub async fn watch_control(
     tauri::async_runtime::spawn_blocking(move || {
         let new_iv = interval.map(|v| v.clamp(5, 3600));
 
-        // 不管哪个动作，先把间隔落盘
+        let mut cfg = snapshot_cfg(&inner);
+        let mut cfg_dirty = false;
         if let Some(iv) = new_iv {
-            let snapshot = if let Ok(mut c) = inner.cfg.lock() {
-                c.watch_interval = iv;
-                Some((*c).clone())
-            } else {
-                None
-            };
-            if let Some(cfg) = snapshot {
-                let _ = config::save(&cfg);
+            if iv != cfg.watch_interval {
+                cfg.watch_interval = iv;
+                cfg_dirty = true;
             }
         }
 
         match action.as_str() {
             "start" => {
+                // 开关状态要落盘，否则重启后自动重连又变回关闭，开机自启就白搭了
+                if !cfg.auto_watch {
+                    cfg.auto_watch = true;
+                    cfg_dirty = true;
+                }
+                if cfg_dirty {
+                    if let Err(e) = persist(&inner, &cfg) {
+                        inner.bus.push(&format!("[!!] 保存配置失败: {e}"));
+                    }
+                }
+
                 if watcher_running(&inner) {
                     let cur = inner.watcher_state.lock().map(|s| s.interval).unwrap_or(0);
                     if new_iv.is_none() || new_iv == Some(cur) {
@@ -428,6 +457,16 @@ pub async fn watch_control(
                 ActionResult::new(true, "自动重连已启动")
             }
             "stop" => {
+                if cfg.auto_watch {
+                    cfg.auto_watch = false;
+                    cfg_dirty = true;
+                }
+                if cfg_dirty {
+                    if let Err(e) = persist(&inner, &cfg) {
+                        inner.bus.push(&format!("[!!] 保存配置失败: {e}"));
+                    }
+                }
+
                 if !watcher_running(&inner) {
                     return ActionResult::new(true, "自动重连本来就没开");
                 }
@@ -437,10 +476,19 @@ pub async fn watch_control(
             }
             // 只改间隔：没在跑就单纯存下配置，在跑就重启让它生效
             "set" => {
+                if cfg_dirty {
+                    if let Err(e) = persist(&inner, &cfg) {
+                        inner.bus.push(&format!("[!!] 保存配置失败: {e}"));
+                    }
+                }
                 if watcher_running(&inner) {
                     stop_watcher(&inner);
-                    start_watcher(&inner);
-                    ActionResult::new(true, format!("检查间隔已改为 {} 秒", new_iv.unwrap_or(30)))
+                    // 刚查过，不用再来一次
+                    start_watcher_with(&inner, false);
+                    ActionResult::new(
+                        true,
+                        format!("检查间隔已改为 {} 秒", new_iv.unwrap_or(cfg.watch_interval)),
+                    )
                 } else {
                     ActionResult::new(true, "已保存")
                 }
