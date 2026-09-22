@@ -1,0 +1,9 @@
+{
+  "username": "",
+  "password": "",
+  "channel": "中国电信",
+  "portal": "http://10.102.250.36",
+  "profile": "iFudan.stu",
+  "watch_interval": 30,
+  "on_stale_session": "relogin"
+}

@@ -1,0 +1,40 @@
+[package]
+name = "campusflow"
+version = "0.1.0"
+description = "复旦大学 iFudan.stu 校园网自动认证"
+authors = ["CampusFlow"]
+edition = "2021"
+rust-version = "1.77"
+
+# 显式指定产物名，让 `cargo build` 和 Tauri 打包器输出同名，
+# 否则 cargo 会产 campusflow.exe、打包器产 CampusFlow.exe，CI 里容易搞混
+[[bin]]
+name = "CampusFlow"
+path = "src/main.rs"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["tray-icon", "image-png"] }
+tauri-plugin-autostart = "2"
+
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# 门户是纯 HTTP，没有 TLS，所以关掉 ureq 的默认特性（省掉 rustls）
+# 二进制能小一大截，也不需要 openssl。
+ureq = { version = "2", default-features = false }
+
+# 门户响应和 netsh 输出是 GBK
+encoding_rs = "0.8"
+
+# 在系统浏览器里打开认证页
+opener = "0.7"
+
+[profile.release]
+opt-level = "s"
+lto = true
+codegen-units = 1
+strip = true
+panic = "abort"

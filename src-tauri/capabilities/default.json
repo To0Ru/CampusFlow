@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "CampusFlow 主窗口权限：只用 invoke 调自己的命令 + 监听日志事件",
+  "windows": ["main"],
+  "permissions": ["core:default"]
+}

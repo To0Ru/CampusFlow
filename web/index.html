@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CampusFlow</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="app">
+
+  <header class="titlebar">
+    <div class="logo">CF</div>
+    <div class="titlewrap">
+      <div class="title">CampusFlow</div>
+      <div class="ssid" id="ssid">正在读取…</div>
+    </div>
+    <span class="dot" id="dot" title="后端日志通道"></span>
+  </header>
+
+  <nav class="tabs" id="tabs">
+    <button class="tab is-on" data-pane="status">状态</button>
+    <button class="tab" data-pane="log">日志</button>
+    <button class="tab" data-pane="settings">设置</button>
+  </nav>
+
+  <main>
+
+    <!-- ================= 状态 ================= -->
+    <section class="pane is-on" data-pane="status">
+
+      <div class="hero" id="hero">
+        <div class="beacon" id="beacon"></div>
+        <div class="hero-text">
+          <div class="hero-title" id="heroTitle">正在检测…</div>
+          <div class="hero-sub" id="heroSub">读取网络与认证状态</div>
+        </div>
+      </div>
+
+      <div class="row-btns">
+        <button class="btn primary grow" id="btnFix">
+          <span class="spin" id="fixSpin" hidden></span>
+          <span id="fixLabel">一键修复</span>
+        </button>
+        <button class="btn" id="btnRefresh">刷新</button>
+      </div>
+
+      <div class="tiles">
+        <div class="tile">
+          <span class="k">门户状态</span>
+          <b class="v" id="vPortal">—</b>
+        </div>
+        <div class="tile">
+          <span class="k">出口运营商</span>
+          <b class="v" id="vOutport">—</b>
+        </div>
+        <div class="tile">
+          <span class="k">账号</span>
+          <b class="v" id="vUser">—</b>
+        </div>
+        <div class="tile">
+          <span class="k">内网 IP</span>
+          <b class="v mono" id="vIp">—</b>
+        </div>
+        <div class="tile">
+          <span class="k">已在线</span>
+          <b class="v" id="vDuration">—</b>
+        </div>
+        <div class="tile">
+          <span class="k">余额</span>
+          <b class="v" id="vBalance">—</b>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-row">
+          <div class="card-label">
+            <b>自动守护</b>
+            <small>掉线时自动完成「注销僵尸会话 → 选运营商 → 认证」</small>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="watchToggle">
+            <i></i>
+          </label>
+        </div>
+        <div class="card-foot">
+          <span>每
+            <input class="num" id="watchInterval" type="number" min="5" max="3600" value="30">
+            秒检查</span>
+          <span>已检查 <b id="wChecks">0</b></span>
+          <span>已修复 <b id="wFixes">0</b></span>
+          <span>最近 <b id="wLast">—</b></span>
+        </div>
+      </div>
+
+      <div class="row-btns">
+        <button class="btn ghost grow" id="btnPortal">打开认证页</button>
+        <button class="btn ghost grow" id="btnLogout">注销会话</button>
+      </div>
+
+    </section>
+
+    <!-- ================= 日志 ================= -->
+    <section class="pane" data-pane="log">
+      <div class="logbar">
+        <label class="chk"><input type="checkbox" id="autoScroll" checked><span>自动滚动</span></label>
+        <button class="mini" id="btnClearLog">清空</button>
+      </div>
+      <div class="log" id="log"></div>
+    </section>
+
+    <!-- ================= 设置 ================= -->
+    <section class="pane" data-pane="settings">
+      <form id="cfgForm" autocomplete="off">
+        <label class="field">
+          <span>学号 / 用户名</span>
+          <input id="fUser" type="text" placeholder="如 ad57361477" autocomplete="username">
+        </label>
+
+        <label class="field">
+          <span>密码 <em id="pwdNote"></em></span>
+          <input id="fPass" type="password" placeholder="留空表示不修改" autocomplete="new-password">
+        </label>
+
+        <label class="field">
+          <span>出口运营商</span>
+          <input id="fChannel" type="text" list="channels" placeholder="中国电信">
+          <datalist id="channels">
+            <option value="校园网"></option>
+            <option value="中国移动"></option>
+            <option value="中国电信"></option>
+            <option value="中国联通"></option>
+          </datalist>
+        </label>
+
+        <label class="field">
+          <span>守护间隔（秒）</span>
+          <input id="fInterval" type="number" min="5" max="3600" value="30">
+        </label>
+
+        <div class="card-row compact">
+          <div class="card-label">
+            <b>开机自启</b>
+            <small>写当前用户注册表 Run 键，不需要管理员</small>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="fAutostart">
+            <i></i>
+          </label>
+        </div>
+
+        <div class="row-btns">
+          <button class="btn primary grow" type="submit">保存配置</button>
+        </div>
+        <div class="form-msg" id="cfgMsg"></div>
+      </form>
+
+      <div class="about" id="about"></div>
+
+      <div class="row-btns">
+        <button class="btn ghost grow" id="btnQuit">退出程序</button>
+      </div>
+      <p class="hint">关闭窗口只会收进托盘，后台守护继续运行；真正退出点上面的按钮或托盘菜单。</p>
+    </section>
+
+  </main>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="app.js"></script>
+</body>
+</html>

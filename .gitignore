@@ -1,0 +1,18 @@
+# ---- 凭证：含明文密码，绝对不能提交 ---- #
+config.json
+legacy/config.json
+**/config.json
+
+# ---- Rust ---- #
+src-tauri/target/
+src-tauri/gen/
+
+# ---- Python（legacy 目录）---- #
+__pycache__/
+*.pyc
+
+# ---- 杂项 ---- #
+*.log
+tmp_body.json
+.DS_Store
+Thumbs.db

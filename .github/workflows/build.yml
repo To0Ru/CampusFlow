@@ -1,0 +1,71 @@
+name: Build
+
+on:
+  push:
+    branches: ["**"]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: src-tauri
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 安装 Rust（MSVC 工具链 windows-latest 自带）
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - name: 缓存 cargo / target
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      # 这一步最快，报错先看这里
+      - name: cargo check
+        run: cargo check --all-targets
+
+      - name: 编译 release exe
+        run: cargo build --release
+
+      - name: 上传 exe（任意分支都能下载来测）
+        uses: actions/upload-artifact@v4
+        with:
+          name: CampusFlow-exe-${{ github.sha }}
+          path: src-tauri/target/release/CampusFlow.exe
+          if-no-files-found: error
+          retention-days: 30
+
+      # ---------------- 只有打 tag 才做安装包 + 发 Release ---------------- #
+
+      - name: 安装 Node（Tauri 打包器用）
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: 生成 NSIS 安装包
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: npx --yes @tauri-apps/cli@^2 build
+
+      - name: 发布 Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            src-tauri/target/release/CampusFlow.exe
+            src-tauri/target/release/bundle/nsis/*.exe
+          generate_release_notes: true
+          draft: false

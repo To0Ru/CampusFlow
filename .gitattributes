@@ -1,0 +1,9 @@
+# 统一换行符，避免 Windows/Linux 来回转换把整个文件标成改动
+* text=auto eol=lf
+
+# Windows 批处理必须 CRLF
+*.bat text eol=crlf
+
+# 二进制
+*.png binary
+*.ico binary
