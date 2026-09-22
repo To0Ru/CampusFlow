@@ -40,8 +40,21 @@ CampusFlow 就是为了干掉这个重复劳动：**后台常驻，掉线自动�
 
 | 文件 | 说明 |
 |---|---|
-| `CampusFlow.exe` | **绿色版**，双击即用，不写注册表 |
+| `CampusFlow.exe` | **免安装版**，双击即用 |
 | `CampusFlow_*_x64-setup.exe` | 安装包，当前用户安装，**不需要管理员权限** |
+
+> **这不是绿色软件，会在本机留两样东西**，先说清楚：
+>
+> | 内容 | 位置 | 什么时候写 |
+> |---|---|---|
+> | 配置（账号密码、运营商等，约 200 字节） | `%APPDATA%\CampusFlow\config.json` | 你在「设置」里点保存时 |
+> | 开机自启 | `HKCU\Software\Microsoft\Windows\CurrentVersion\Run\CampusFlow` | **只在你打开「开机自启」时**，默认不写 |
+>
+> 除此之外不留任何东西：日志和状态全在内存里，没有临时文件、没有缓存、没有遥测。
+> 不想留了：关掉自启开关，再把 `%APPDATA%\CampusFlow\` 删掉就行。
+>
+> 自启是可选的，默认不写。
+> 不点「保存配置」的话，本机只会多出一个空的 `%APPDATA%\CampusFlow\` 目录。
 
 **系统要求**：Windows 10 / 11（依赖系统自带的 WebView2，Win11 和新版 Win10 都已内置）
 
@@ -167,7 +180,7 @@ cargo run          # 调试模式，自动开 devtools
 src-tauri/src/
 ├── portal.rs      门户协议：两步认证 / 注销 / 在线查询
 ├── net.rs         联网探测（不跟随跳转，识别门户劫持）+ 读 WiFi SSID
-├── config.rs      配置读写（便携优先，退回落 %APPDATA%）
+├── config.rs      配置读写（%APPDATA%\CampusFlow\config.json）
 ├── fixer.rs       修复编排 + 状态采集
 ├── watcher.rs     后台守护线程
 ├── logbus.rs      日志缓冲 + 事件广播
