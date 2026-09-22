@@ -13,6 +13,10 @@
 
 CampusFlow 就是为了干掉这个重复劳动：**后台常驻，掉线自动重连，你什么都不用管。**
 
+<p align="center">
+  <img src="docs/screenshot.png" width="400" alt="CampusFlow 界面">
+</p>
+
 ---
 
 ## ✨ 特性

@@ -52,7 +52,7 @@ AC 侧会话没了、门户侧还是 `on` 时，门户一看你在线就直接�
   "message": "ok",
   "data": {
     "useronlinestate": "on",
-    "username": "ad57361477",
+    "username": "ad12345678",
     "balance": "0",
     "duration": "731",
     "outport": "中国电信",
@@ -70,7 +70,7 @@ AC 侧会话没了、门户侧还是 `on` 时，门户一看你在线就直接�
 
 ```json
 {
-  "username": "ad57361477",
+  "username": "ad12345678",
   "password": "******",
   "ifautologin": "0",
   "channel": "_GET",
@@ -110,7 +110,7 @@ AC 侧会话没了、门户侧还是 `on` 时，门户一看你在线就直接�
   "code": 200,
   "data": {
     "reauth": false,
-    "username": "ad57361477",
+    "username": "ad12345678",
     "balance": "0.00",
     "duration": "0",
     "outport": "中国电信",
@@ -123,7 +123,7 @@ AC 侧会话没了、门户侧还是 `on` 时，门户一看你在线就直接�
 
 ```json
 {
-  "username": "ad57361477",
+  "username": "ad12345678",
   "password": "123",
   "ifautologin": "1",
   "channel": "0",
