@@ -3,6 +3,7 @@
 //! 所有会阻塞的操作（HTTP、netsh、sleep）都扔进 `spawn_blocking`，
 //! 否则会把 UI 线程卡死——同步命令在 Tauri 里是跑在主线程上的。
 
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
@@ -514,7 +515,9 @@ pub fn open_portal(state: State<'_, AppState>) -> Result<(), String> {
 
 /// 关闭窗口 = 收进托盘；真正退出走这里。
 #[tauri::command]
-pub fn quit_app(app: AppHandle) {
+pub fn quit_app(app: AppHandle, state: State<'_, AppState>) {
+    // 先标记“真的要退出”，否则会被 ExitRequested 里的拦截逻辑挡住
+    state.0.shutting_down.store(Ordering::SeqCst);
     app.exit(0);
 }
 

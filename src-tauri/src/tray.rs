@@ -2,6 +2,7 @@
 //!
 //! 关闭窗口只是收进托盘，后台守护继续跑；真正退出在托盘菜单里。
 
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
 use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
@@ -46,7 +47,11 @@ pub fn build(app: &tauri::App, inner: Arc<Inner>) -> tauri::Result<TrayIcon> {
                     fixer::fix(&cfg, &sink);
                 });
             }
-            "quit" => app.exit(0),
+            "quit" => {
+                // 先标记“真的要退出”，否则会被 ExitRequested 里的拦截逻辑挡住
+                inner_for_menu.shutting_down.store(true, Ordering::SeqCst);
+                app.exit(0)
+            }
             _ => {}
         })
         .on_tray_icon_event(|tray, event| {

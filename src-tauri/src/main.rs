@@ -35,6 +35,10 @@ pub struct Inner {
     pub tray: Mutex<Option<TrayIcon>>,
     /// 托盘没建成功时，关窗要真的退出，否则窗口一销毁就再也叫不回来了
     pub tray_ok: AtomicBool,
+    /// 用户主动退出时置位。
+    /// 用来区分「关窗销毁导致 Tauri 请求退出」和「用户真的要退出」——
+    /// 前者要拦住，后者要放行。
+    pub shutting_down: AtomicBool,
 }
 
 pub struct AppState(pub Arc<Inner>);
@@ -48,7 +52,7 @@ fn launched_as_tray() -> bool {
 }
 
 fn main() {
-    tauri::Builder::default()
+    let app = tauri::Builder::default()
         .setup(|app| {
             let cfg = config::load();
             let bus = Arc::new(LogBus::new());
@@ -66,6 +70,7 @@ fn main() {
                 busy: Arc::new(AtomicBool::new(false)),
                 tray: Mutex::new(None),
                 tray_ok: AtomicBool::new(false),
+                shutting_down: AtomicBool::new(false),
             });
             app.manage(AppState(Arc::clone(&inner)));
 
@@ -136,6 +141,21 @@ fn main() {
             commands::open_portal,
             commands::quit_app,
         ])
-        .run(tauri::generate_context!())
+        .build(tauri::generate_context!())
         .expect("CampusFlow 启动失败");
+
+    app.run(|handle, event| {
+        // 关窗时我们主动 destroy 了唯一一个窗口，Tauri 看到窗口数为 0 就会请求退出。
+        // 托盘还在的话必须拦住，否则“关窗进托盘”直接就变成退程序了。
+        // 用户真点「退出」时 shutting_down 已置位，这里放行。
+        if let tauri::RunEvent::ExitRequested { api, .. } = event {
+            let state = handle.state::<AppState>();
+            let inner = &state.0;
+            if inner.tray_ok.load(Ordering::SeqCst)
+                && !inner.shutting_down.load(Ordering::SeqCst)
+            {
+                api.prevent_exit();
+            }
+        }
+    });
 }
