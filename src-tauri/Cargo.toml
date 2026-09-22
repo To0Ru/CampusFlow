@@ -21,6 +21,10 @@ tauri = { version = "2", features = ["tray-icon", "image-png"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 
+# DPAPI 加出来的密文是二进制，需要编码成文本才能塞进 JSON。
+# base64 本来就在 Tauri 的依赖树里（0.22.x），复用同一个版本不增加编译量。
+base64 = "0.22"
+
 # 门户是纯 HTTP，没有 TLS，所以关掉 ureq 的默认特性（省掉 rustls）
 # 二进制能小一大截，也不需要 openssl。
 ureq = { version = "2", default-features = false }

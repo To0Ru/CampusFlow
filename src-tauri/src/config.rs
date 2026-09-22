@@ -97,15 +97,35 @@ fn appdata_dir() -> PathBuf {
 
 pub fn load() -> Config {
     let path = config_path();
-    match fs::read_to_string(&path) {
-        Ok(text) => serde_json::from_str(&text).unwrap_or_default(),
-        Err(_) => Config::default(),
+    let text = match fs::read_to_string(&path) {
+        Ok(t) => t,
+        Err(_) => return Config::default(),
+    };
+    let mut cfg: Config = serde_json::from_str(&text).unwrap_or_default();
+
+    // 旧版是明文存的。发现明文就顺手升级成加密存储，用户不用做任何事。
+    let legacy = (!cfg.username.is_empty() && !crate::dpapi::is_encrypted(&cfg.username))
+        || (!cfg.password.is_empty() && !crate::dpapi::is_encrypted(&cfg.password));
+
+    // 内存里始终是明文，其余代码不用关心加密
+    cfg.username = crate::dpapi::decrypt(&cfg.username);
+    cfg.password = crate::dpapi::decrypt(&cfg.password);
+
+    if legacy {
+        let _ = save(&cfg);
     }
+    cfg
 }
 
 pub fn save(cfg: &Config) -> Result<(), String> {
     let path = config_path();
-    let text = serde_json::to_string_pretty(cfg).map_err(|e| e.to_string())?;
+
+    // 落盘前把敏感字段换成密文
+    let mut on_disk = cfg.clone();
+    on_disk.username = crate::dpapi::encrypt(&cfg.username)?;
+    on_disk.password = crate::dpapi::encrypt(&cfg.password)?;
+
+    let text = serde_json::to_string_pretty(&on_disk).map_err(|e| e.to_string())?;
     fs::write(&path, text).map_err(|e| format!("写入 {} 失败: {e}", path.display()))
 }
 

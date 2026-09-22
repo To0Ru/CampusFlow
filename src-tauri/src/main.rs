@@ -4,6 +4,7 @@
 mod autostart;
 mod commands;
 mod config;
+mod dpapi;
 mod fixer;
 mod logbus;
 mod net;
