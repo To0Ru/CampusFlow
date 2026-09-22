@@ -12,56 +12,68 @@ use crate::portal::decode_console;
 const USER_AGENT: &str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) \
      AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36";
 
-/// (探测地址, 期望状态码, 正文必须包含的关键词（大小写不敏感）)
+pub struct Probe {
+    pub url: &'static str,
+    /// 期望状态码
+    pub want: u16,
+    /// 正文必须包含的关键词（大小写不敏感）
+    pub needle: Option<&'static str>,
+    /// 允许跳转到这个域名（含子域）。HTTP→HTTPS 升级用。
+    pub ok_redirect: Option<&'static str>,
+}
+
+/// 探测点。
 ///
-/// 只需要一个点：百度。
+/// **必须用带 `www` 的 `http://www.baidu.com`：**
+/// - 不带 www 的 `baidu.com` 会 301 跳 https；
+/// - 带 www 的用浏览器 UA 请求会 302 跳 `https://www.baidu.com/`
+///   （百度对浏览器 UA 做 HTTP→HTTPS 强制升级；curl 的 UA 才会给 200）。
 ///
-/// 为什么必须是 `www.baidu.com`：
-/// - 不带 www 的 `baidu.com` 会 301 跳 `https://www.baidu.com/`，
-///   而我们在 Cargo.toml 里关掉了 ureq 的 TLS 特性，跳过去就废物了；
-///   再加上这里 `redirects(0)` 不跟跳转，就会把 301 当成“被门户劫持”误报。
-/// - 带 www 是 200 直出，不跳转。
-///
-/// 想加备用点防单站抽风，在这里追一行即可，格式一致。
-pub const PROBES: &[(&str, u16, Option<&str>)] = &[
-    ("http://www.baidu.com", 200, Some("baidu")),
-];
+/// 这两种跳转都要当成“网络正常”——它们跳的是百度自己。
+/// 判断依据是 **Location 指向哪**，不是状态码：
+/// 跳去 `*.baidu.com` 就算通，跳去别的（比如门户 `10.102.250.36`）就是劫持。
+pub const PROBES: &[Probe] = &[Probe {
+    url: "http://www.baidu.com",
+    want: 200,
+    needle: Some("baidu"),
+    ok_redirect: Some("baidu.com"),
+}];
 
 /// 返回 (是否真的能上外网, 说明)。
-///
-/// 多个探测点全部失败才算断网，避免单个站点抽风造成误判。
 pub fn check_internet() -> (bool, String) {
     let mut fails: Vec<String> = Vec::new();
 
-    for (url, want, needle) in PROBES {
-        let host = host_of(url);
+    for probe in PROBES {
+        let host = host_of(probe.url);
         let agent = ureq::AgentBuilder::new()
             .timeout(Duration::from_secs(5))
             .try_proxy_from_env(false)
-            // 不跟随跳转：被门户接管时才能识别出来
+            // 不跟随跳转：只有自己看 Location 才能分辨是升级还是劫持
             .redirects(0)
             .build();
 
-        match agent.get(*url).set("User-Agent", USER_AGENT).call() {
+        match agent.get(probe.url).set("User-Agent", USER_AGENT).call() {
             Ok(resp) => {
                 let code = resp.status();
-                if code != *want {
+                if code != probe.want {
                     fails.push(format!("{host}: HTTP {code}（疑似门户劫持）"));
                     continue;
                 }
                 // 光看状态码不够：门户劫持后往往也是 200，得验正文
-                if let Some(needle) = needle {
+                if let Some(needle) = probe.needle {
                     let mut body = String::new();
                     let _ = resp.into_reader().take(8192).read_to_string(&mut body);
-                    let body_lc = body.to_ascii_lowercase();
-                    if !body_lc.contains(&needle.to_ascii_lowercase()) {
+                    if !body.to_ascii_lowercase().contains(&needle.to_ascii_lowercase()) {
                         fails.push(format!("{host}: 内容异常（疑似门户劫持）"));
                         continue;
                     }
                 }
                 return (true, host.to_string());
             }
-            Err(ureq::Error::Status(code, _)) => {
+            Err(ureq::Error::Status(code, resp)) => {
+                if is_benign_redirect(probe, &resp, host) {
+                    return (true, host.to_string());
+                }
                 fails.push(format!("{host}: HTTP {code}（疑似门户劫持）"));
             }
             Err(e) => fails.push(format!("{host}: {}", crate::portal::short(e))),
@@ -77,6 +89,23 @@ pub fn check_internet() -> (bool, String) {
             fails.join("；")
         ),
     )
+}
+
+/// 跳转目标是不是"自己人"（HTTP→HTTPS 升级），而不是跳到门户。
+fn is_benign_redirect(probe: &Probe, resp: &ureq::Response, probe_host: &str) -> bool {
+    let Some(suffix) = probe.ok_redirect else {
+        return false;
+    };
+    let Some(loc) = resp.header("Location") else {
+        return false;
+    };
+    // 相对跳转 = 还在同一个域，放行
+    let target = if loc.contains("://") {
+        host_of(loc)
+    } else {
+        probe_host
+    };
+    target == suffix || target.ends_with(&format!(".{suffix}"))
 }
 
 fn host_of(url: &str) -> &str {
