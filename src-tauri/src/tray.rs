@@ -5,12 +5,14 @@
 use std::sync::Arc;
 
 use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
-use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
+use tauri::tray::{MouseButton, MouseButtonState, TrayIcon, TrayIconBuilder, TrayIconEvent};
 use tauri::{AppHandle, Manager};
 
 use crate::{fixer, Inner};
 
-pub fn build(app: &tauri::App, inner: Arc<Inner>) -> tauri::Result<()> {
+/// 返回 `TrayIcon` 句柄，调用方**必须存住它**。
+/// 在 Tauri v2 里丢下这个句柄，托盘图标会跟着消失。
+pub fn build(app: &tauri::App, inner: Arc<Inner>) -> tauri::Result<TrayIcon> {
     let show = MenuItem::with_id(app, "show", "显示窗口", true, None::<&str>)?;
     let fix = MenuItem::with_id(app, "fix", "一键修复", true, None::<&str>)?;
     let sep = PredefinedMenuItem::separator(app)?;
@@ -60,8 +62,8 @@ pub fn build(app: &tauri::App, inner: Arc<Inner>) -> tauri::Result<()> {
         builder = builder.icon(icon.clone());
     }
 
-    builder.build(app)?;
-    Ok(())
+    let icon = builder.build(app)?;
+    Ok(icon)
 }
 
 fn show_window(app: &AppHandle) {

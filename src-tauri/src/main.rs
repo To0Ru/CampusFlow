@@ -11,9 +11,10 @@ mod portal;
 mod tray;
 mod watcher;
 
-use std::sync::atomic::AtomicBool;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
+use tauri::tray::TrayIcon;
 use tauri::Manager;
 
 use crate::logbus::LogBus;
@@ -26,6 +27,10 @@ pub struct Inner {
     pub watcher: Mutex<Option<Watcher>>,
     pub watcher_state: SharedWatcherState,
     pub busy: AtomicBool,
+    /// TrayIcon 句柄必须一直存着，否则托盘图标会被析构掉
+    pub tray: Mutex<Option<TrayIcon>>,
+    /// 托盘没建成功时，关窗要真的退出，否则窗口一隐藏就再也叫不回来了
+    pub tray_ok: AtomicBool,
 }
 
 pub struct AppState(pub Arc<Inner>);
@@ -46,12 +51,20 @@ fn main() {
                     ..Default::default()
                 })),
                 busy: AtomicBool::new(false),
+                tray: Mutex::new(None),
+                tray_ok: AtomicBool::new(false),
             });
             app.manage(AppState(Arc::clone(&inner)));
 
-            if let Err(e) = tray::build(app, Arc::clone(&inner)) {
-                // 托盘建不出来不影响主功能，但要留个记录
-                bus.push(&format!("[??] 托盘图标创建失败: {e}"));
+            match tray::build(app, Arc::clone(&inner)) {
+                Ok(icon) => {
+                    // 句柄存进 Inner，随应用存活
+                    if let Ok(mut slot) = inner.tray.lock() {
+                        *slot = Some(icon);
+                    }
+                    inner.tray_ok.store(true, Ordering::SeqCst);
+                }
+                Err(e) => bus.push(&format!("[??] 托盘图标创建失败: {e}（关窗将直接退出）")),
             }
 
             bus.push(&format!("[ok] CampusFlow v{} 已启动", env!("CARGO_PKG_VERSION")));
@@ -63,9 +76,17 @@ fn main() {
         })
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
-                // 关窗 = 收进托盘，守护继续跑
-                api.prevent_close();
-                let _ = window.hide();
+                // 托盘可用才收进托盘；否则放行，让用户真能把程序关掉
+                let tray_ok = window
+                    .app_handle()
+                    .state::<AppState>()
+                    .0
+                    .tray_ok
+                    .load(Ordering::SeqCst);
+                if tray_ok {
+                    api.prevent_close();
+                    let _ = window.hide();
+                }
             }
         })
         .invoke_handler(tauri::generate_handler![
