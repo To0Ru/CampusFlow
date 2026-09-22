@@ -1,6 +1,6 @@
 [package]
 name = "campusflow"
-version = "0.1.1"
+version = "0.1.2"
 description = "复旦大学 iFudan.stu 校园网自动认证"
 authors = ["CampusFlow"]
 edition = "2021"
