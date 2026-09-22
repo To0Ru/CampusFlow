@@ -17,7 +17,6 @@ tauri-build = { version = "2", features = [] }
 
 [dependencies]
 tauri = { version = "2", features = ["tray-icon", "image-png"] }
-tauri-plugin-autostart = "2"
 
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
@@ -29,8 +28,9 @@ ureq = { version = "2", default-features = false }
 # 门户响应和 netsh 输出是 GBK
 encoding_rs = "0.8"
 
-# 在系统浏览器里打开认证页
-opener = "0.7"
+# 注：没用 tauri-plugin-autostart（自己写 HKCU 注册表即可，见 autostart.rs），
+# 也没用 opener（开认证页走 `cmd /c start`，见 commands.rs）。
+# 少两个依赖，编译快不少。
 
 [profile.release]
 opt-level = "s"

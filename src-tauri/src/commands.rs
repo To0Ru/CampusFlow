@@ -278,13 +278,16 @@ pub struct ConfigView {
 #[tauri::command]
 pub fn get_config(state: State<'_, AppState>) -> ConfigView {
     let cfg = snapshot_cfg(&state.0);
+    // 先在移走字段前把需要借整个 cfg 的值算出来
+    let channel = cfg.channel_or_default().to_string();
+    let has_password = !cfg.password.is_empty();
     ConfigView {
         username: cfg.username,
-        channel: cfg.channel_or_default().to_string(),
+        channel,
         interval: cfg.watch_interval,
         portal: cfg.portal,
         profile: cfg.profile,
-        has_password: !cfg.password.is_empty(),
+        has_password,
         autostart: autostart::is_enabled(),
     }
 }
