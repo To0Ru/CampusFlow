@@ -517,7 +517,7 @@ pub fn open_portal(state: State<'_, AppState>) -> Result<(), String> {
 #[tauri::command]
 pub fn quit_app(app: AppHandle, state: State<'_, AppState>) {
     // 先标记“真的要退出”，否则会被 ExitRequested 里的拦截逻辑挡住
-    state.0.shutting_down.store(Ordering::SeqCst);
+    state.0.shutting_down.store(true, Ordering::SeqCst);
     app.exit(0);
 }
 
