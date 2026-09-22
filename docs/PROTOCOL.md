@@ -205,11 +205,16 @@ Rust 用 `encoding_rs::GBK`。
 
 | 地址 | 期望 |
 |---|---|
-| `http://connect.rom.miui.com/generate_204` | 204 |
-| `http://www.gstatic.com/generate_204` | 204 |
-| `http://captive.apple.com/hotspot-detect.html` | 200 且正文含 `Success` |
+| `http://www.baidu.com` | 200 且正文含 `baidu` |
 
-三个点**全部失败**才算断网，避免单个站点抽风造成误判。
+只用百度一个点，国内直连稳定。
+
+> **必须是带 `www` 的。** `http://baidu.com` 会 `301` 跳到 `https://www.baidu.com/`，
+> 而项目在 `Cargo.toml` 里关掉了 `ureq` 的 TLS 特性（门户是纯 HTTP，不需要 TLS，
+> 少一个 rustls 能小一截），跳过去就没法处理；再加上这里 `redirects(0)` 不跟跳转，
+> 结果会把 `301` 当成“被门户劫持”**每次都误报断网**。
+>
+> 想加备用点防单站抽风，在 `net.rs` 的 `PROBES` 里追一行即可，格式一致。
 
 ---
 

@@ -1,4 +1,4 @@
-//! 后台自动连接线程：定时探测，掉线自动重连。
+//! 后台自动重连线程：定时探测，掉线自动重连。
 
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
@@ -54,7 +54,7 @@ impl Watcher {
         }
 
         let handle = thread::spawn(move || {
-            log(&format!("[..] 自动连接已启动，每 {interval}s 检查一次"));
+            log(&format!("[..] 自动重连已启动，每 {interval}s 检查一次"));
 
             while !stop_inner.load(Ordering::Relaxed) {
                 let (ok, why) = net::check_internet();

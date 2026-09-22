@@ -419,21 +419,21 @@ pub async fn watch_control(
                 if watcher_running(&inner) {
                     let cur = inner.watcher_state.lock().map(|s| s.interval).unwrap_or(0);
                     if new_iv.is_none() || new_iv == Some(cur) {
-                        return ActionResult::new(true, "自动连接已在运行");
+                        return ActionResult::new(true, "自动重连已在运行");
                     }
                     stop_watcher(&inner);
-                    inner.bus.push("[..] 检查间隔变了，自动连接重启中…");
+                    inner.bus.push("[..] 检查间隔变了，自动重连重启中…");
                 }
                 start_watcher(&inner);
-                ActionResult::new(true, "自动连接已启动")
+                ActionResult::new(true, "自动重连已启动")
             }
             "stop" => {
                 if !watcher_running(&inner) {
-                    return ActionResult::new(true, "自动连接本来就没开");
+                    return ActionResult::new(true, "自动重连本来就没开");
                 }
                 stop_watcher(&inner);
-                inner.bus.push("[..] 自动连接已停止");
-                ActionResult::new(true, "自动连接已停止")
+                inner.bus.push("[..] 自动重连已停止");
+                ActionResult::new(true, "自动重连已停止")
             }
             // 只改间隔：没在跑就单纯存下配置，在跑就重启让它生效
             "set" => {

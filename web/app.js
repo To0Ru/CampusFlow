@@ -102,7 +102,7 @@ function renderStatus(s) {
   el.vPortal.textContent = st === 'on' ? '在线' : st === 'off' ? '未认证' : '未知';
   el.vPortal.className = 'v ' + (st === 'on' ? 'on' : st === 'off' ? 'off' : '');
 
-  // 自动连接统计
+  // 自动重连统计
   const w = s.watcher || {};
   el.wChecks.textContent = w.checks ?? 0;
   el.wFixes.textContent = w.fixes ?? 0;
@@ -308,7 +308,7 @@ el.btnPortal.addEventListener('click', async () => {
 });
 
 el.btnQuit.addEventListener('click', async () => {
-  if (confirm('确认退出 CampusFlow？退出后自动连接也会停止。')) {
+  if (confirm('确认退出 CampusFlow？退出后自动重连也会停止。')) {
     await invoke('quit_app');
   }
 });

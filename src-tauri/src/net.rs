@@ -12,11 +12,19 @@ use crate::portal::decode_console;
 const USER_AGENT: &str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) \
      AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36";
 
-/// (探测地址, 期望状态码)
-pub const PROBES: &[(&str, u16)] = &[
-    ("http://connect.rom.miui.com/generate_204", 204),
-    ("http://www.gstatic.com/generate_204", 204),
-    ("http://captive.apple.com/hotspot-detect.html", 200),
+/// (探测地址, 期望状态码, 正文必须包含的关键词（大小写不敏感）)
+///
+/// 只需要一个点：百度。
+///
+/// 为什么必须是 `www.baidu.com`：
+/// - 不带 www 的 `baidu.com` 会 301 跳 `https://www.baidu.com/`，
+///   而我们在 Cargo.toml 里关掉了 ureq 的 TLS 特性，跳过去就废物了；
+///   再加上这里 `redirects(0)` 不跟跳转，就会把 301 当成“被门户劫持”误报。
+/// - 带 www 是 200 直出，不跳转。
+///
+/// 想加备用点防单站抽风，在这里追一行即可，格式一致。
+pub const PROBES: &[(&str, u16, Option<&str>)] = &[
+    ("http://www.baidu.com", 200, Some("baidu")),
 ];
 
 /// 返回 (是否真的能上外网, 说明)。
@@ -25,7 +33,7 @@ pub const PROBES: &[(&str, u16)] = &[
 pub fn check_internet() -> (bool, String) {
     let mut fails: Vec<String> = Vec::new();
 
-    for (url, want) in PROBES {
+    for (url, want, needle) in PROBES {
         let host = host_of(url);
         let agent = ureq::AgentBuilder::new()
             .timeout(Duration::from_secs(5))
@@ -41,10 +49,12 @@ pub fn check_internet() -> (bool, String) {
                     fails.push(format!("{host}: HTTP {code}（疑似门户劫持）"));
                     continue;
                 }
-                if *want == 200 {
+                // 光看状态码不够：门户劫持后往往也是 200，得验正文
+                if let Some(needle) = needle {
                     let mut body = String::new();
-                    let _ = resp.into_reader().take(512).read_to_string(&mut body);
-                    if !body.contains("Success") {
+                    let _ = resp.into_reader().take(8192).read_to_string(&mut body);
+                    let body_lc = body.to_ascii_lowercase();
+                    if !body_lc.contains(&needle.to_ascii_lowercase()) {
                         fails.push(format!("{host}: 内容异常（疑似门户劫持）"));
                         continue;
                     }
