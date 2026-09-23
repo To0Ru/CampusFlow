@@ -40,6 +40,9 @@ pub struct Config {
     /// relogin = 僵尸会话先注销再认证；login_only = 只认证不注销
     pub on_stale_session: String,
     pub autostart: bool,
+    /// 开机自启并完成启动检查后，直接退出程序（连托盘一起退）。
+    /// 用于“开机连一次就完事”的场景，不需要后台常驻。
+    pub auto_exit: bool,
 }
 
 impl Default for Config {
@@ -55,6 +58,7 @@ impl Default for Config {
             auto_watch: false,
             on_stale_session: "relogin".to_string(),
             autostart: false,
+            auto_exit: false,
         }
     }
 }

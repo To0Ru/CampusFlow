@@ -4,7 +4,7 @@
 
 # CampusFlow
 
-> 复旦大学 `iFudan.stu` 校园网自动认证 · 掉线自动重连
+> 复旦大学张江生活组团 `iFudan.stu` 校园网自动认证 · 掉线自动重连
 
 [![Build](https://github.com/To0Ru/CampusFlow/actions/workflows/build.yml/badge.svg)](https://github.com/To0Ru/CampusFlow/actions/workflows/build.yml)
 [![Release](https://img.shields.io/github/v/release/To0Ru/CampusFlow?display_name=tag&sort=semver)](https://github.com/To0Ru/CampusFlow/releases/latest)
@@ -59,6 +59,10 @@ CampusFlow 就是为了干掉这个重复劳动：**后台常驻，掉线自动�
 > 自启写的是当前用户注册表 `HKCU\...\CurrentVersion\Run`，不需要管理员。
 > 但存的是 exe 的**绝对路径**，所以**挪动程序目录后要重新开启一次**，
 > 否则注册表还指着旧位置。
+
+再往下的「**自动退出**」是给“开机连一次就完事”的场景准备的（需先开开机自启）：
+开机后等 iFudan.stu 连上、自动认证完，程序直接退出，不在后台常驻。
+开着它就等于“每天开机自动连一次网，然后不占你任何东西”。
 
 > **关闭窗口只是收进托盘**，守护还在后台跑。真正退出请点设置页的「退出程序」，或右键托盘图标 → 退出。
 

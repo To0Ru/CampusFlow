@@ -288,6 +288,8 @@ pub struct ConfigView {
     pub profile: String,
     pub has_password: bool,
     pub autostart: bool,
+    /// 开机自启并完成启动检查后直接退出（连托盘一起退）
+    pub auto_exit: bool,
 }
 
 #[tauri::command]
@@ -307,6 +309,7 @@ pub fn get_config(state: State<'_, AppState>) -> ConfigView {
         profile: cfg.profile,
         has_password,
         autostart: autostart::is_enabled(),
+        auto_exit: cfg.auto_exit,
     }
 }
 
@@ -318,6 +321,7 @@ pub struct ConfigPatch {
     pub interval: Option<u64>,
     pub check_mode: Option<String>,
     pub autostart: Option<bool>,
+    pub auto_exit: Option<bool>,
 }
 
 #[tauri::command]
@@ -373,6 +377,12 @@ pub async fn save_config(
             if v != cfg.autostart {
                 cfg.autostart = v;
                 changed.push("开机自启");
+            }
+        }
+        if let Some(v) = patch.auto_exit {
+            if v != cfg.auto_exit {
+                cfg.auto_exit = v;
+                changed.push("自动退出");
             }
         }
 

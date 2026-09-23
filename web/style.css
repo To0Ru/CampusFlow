@@ -201,6 +201,14 @@ main {
   background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600;
 }
 .btn.primary:hover:not(:disabled) { background: var(--accent-2); border-color: var(--accent-2); }
+/* 没修改时置灰，别让人觉得随时都能点 */
+.btn.primary:disabled {
+  background: var(--card-2);
+  border-color: var(--line);
+  color: var(--fg-faint);
+  box-shadow: none;
+  font-weight: 500;
+}
 .btn.ghost { background: transparent; }
 
 .spin {

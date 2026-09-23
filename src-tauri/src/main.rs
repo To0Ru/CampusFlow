@@ -103,15 +103,52 @@ fn main() {
                 let _ = window::ensure(app.handle());
             }
 
-            // ---------------- 任务 A：后台常驻守护 ----------------
-            if cfg.is_ready() && cfg.auto_watch {
+            // ---------------- 任务 A：后台常驻守护 / 任务 B 结束后的动作 ----------------
+            //
+            // 任务 B（启动检查）跑完之后的去向，按优先级：
+            //   1. 开了「自动退出」  -> 整个程序退掉（含托盘）
+            //   2. 开了「自动重连」  -> 拉起任务 A 后台常驻
+            //   3. 都没开            -> 什么都不做，安静待在托盘
+            //
+            // 没开「开机自启」就没有任务 B，任务 A 直接启动。
+            let mut after_startup: Option<startup::DoneHook> = None;
+
+            if cfg.is_ready() && cfg.autostart {
+                let inner_for_hook = Arc::clone(&inner);
+                let app_handle = app.handle().clone();
+                let auto_exit = cfg.auto_exit;
+                let auto_watch = cfg.auto_watch;
+
+                after_startup = Some(Box::new(move || {
+                    if auto_exit {
+                        // 先置退出标志，否则会被 ExitRequested 的拦截逻辑拦住
+                        // （托盘还在时那一拦截是用于“关窗不退出”的）
+                        inner_for_hook.shutting_down.store(true, Ordering::SeqCst);
+                        inner_for_hook.bus.push("[ok] 已开启自动退出，本次启动检查结束，退出程序");
+                        app_handle.exit(0);
+                    } else if auto_watch {
+                        commands::start_watcher(&inner_for_hook);
+                    } else {
+                        inner_for_hook
+                            .bus
+                            .push("[..] 未开启自动重连，程序将在托盘安静待命");
+                    }
+                }));
+            } else if cfg.is_ready() && cfg.auto_watch {
+                // 没开自启，没有任务 B 可等，任务 A 直接启动
                 commands::start_watcher(&inner);
             }
 
             // ---------------- 任务 B：开机后的一次性检查 ----------------
-            // 跟着「开机自启」走：开了自启就执行
+            // 跟着「开机自启」走：开了自启就执行。
+            // 跑完（等到 SSID 或 60 秒超时）会执行 after_startup。
             if cfg.is_ready() && cfg.autostart {
-                startup::spawn(cfg.clone(), bus.sink(), Arc::clone(&inner.busy));
+                startup::spawn(
+                    cfg.clone(),
+                    bus.sink(),
+                    Arc::clone(&inner.busy),
+                    after_startup,
+                );
             }
 
             Ok(())

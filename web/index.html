@@ -148,8 +148,19 @@
           </label>
         </div>
 
+        <div class="card-row compact" id="autoExitRow">
+          <div class="card-label">
+            <b>自动退出</b>
+            <small>开机自启并自动认证 iFudan.stu 后自动退出程序</small>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="fAutoExit">
+            <i></i>
+          </label>
+        </div>
+
         <div class="row-btns">
-          <button class="btn primary grow" type="submit">保存配置</button>
+          <button class="btn primary grow" type="submit" id="btnSave" disabled>保存配置</button>
         </div>
         <div class="form-msg" id="cfgMsg"></div>
       </form>

@@ -23,6 +23,8 @@ const el = {
 
   cfgForm: $('cfgForm'), fUser: $('fUser'), fPass: $('fPass'),
   fChannel: $('fChannel'), fAutostart: $('fAutostart'),
+  fAutoExit: $('fAutoExit'), autoExitRow: $('autoExitRow'),
+  btnSave: $('btnSave'),
   cfgMsg: $('cfgMsg'), pwdNote: $('pwdNote'), about: $('about'),
 
   toast: $('toast'), tabs: $('tabs'),
@@ -246,6 +248,44 @@ function updateModeUI() {
   el.intervalWrap.style.display = m === 'poll' ? '' : 'none';
 }
 
+/* 自动退出只有在开了开机自启时才有意义，否则置灰 */
+function updateAutoExitState() {
+  const on = el.fAutostart.checked;
+  el.fAutoExit.disabled = !on;
+  el.autoExitRow.style.opacity = on ? '' : '0.5';
+}
+
+/*
+ * 「保存配置」按钮的可点状态。
+ *
+ * 记住上次保存时的表单快照，和当前值对比：
+ *   一样 -> 按钮置灰不可点（没什么可存的）
+ *   不一样 -> 变蓝可点
+ *
+ * 密码框永远不预填，所以只要有输入就算“改了”。
+ */
+let savedForm = null;
+
+function formSnapshot() {
+  return JSON.stringify({
+    username: el.fUser.value.trim(),
+    channel: el.fChannel.value,
+    autostart: el.fAutostart.checked,
+    auto_exit: el.fAutoExit.checked,
+    has_password: el.fPass.value !== '',
+  });
+}
+
+function markFormSaved() {
+  savedForm = formSnapshot();
+  updateSaveButton();
+}
+
+function updateSaveButton() {
+  const dirty = savedForm !== null && formSnapshot() !== savedForm;
+  el.btnSave.disabled = !dirty;
+}
+
 /* ------------------------------------------------------------------ */
 /* 配置                                                                */
 /* ------------------------------------------------------------------ */
@@ -260,6 +300,9 @@ async function loadConfig() {
     updateModeUI();
     el.watchInterval.value = c.interval || 30;
     el.fAutostart.checked = !!c.autostart;
+    el.fAutoExit.checked = !!c.auto_exit;
+    updateAutoExitState();
+    markFormSaved();
     el.pwdNote.textContent = c.has_password ? '(已保存)' : '(未设置)';
   } catch (e) {
     toast('读取配置失败：' + e, 'err');
@@ -290,6 +333,7 @@ async function saveConfig(e) {
     username: el.fUser.value.trim(),
     channel: el.fChannel.value,
     autostart: el.fAutostart.checked,
+    auto_exit: el.fAutoExit.checked,
   };
   if (el.fPass.value) patch.password = el.fPass.value;
   if (!patch.username) {
@@ -303,6 +347,7 @@ async function saveConfig(e) {
     el.cfgMsg.className = 'form-msg ' + (r.ok ? 'ok' : 'err');
     if (r.ok) {
       el.fPass.value = '';
+      markFormSaved();
       toast('配置已保存', 'ok');
       await loadConfig();
       await refresh();
@@ -338,6 +383,12 @@ el.btnClearLog.addEventListener('click', async () => {
 });
 
 el.cfgForm.addEventListener('submit', saveConfig);
+
+el.fAutostart.addEventListener('change', updateAutoExitState);
+
+// 任何输入变化都重新算一次保存按钮该不该可点
+el.cfgForm.addEventListener('input', updateSaveButton);
+el.cfgForm.addEventListener('change', updateSaveButton);
 
 el.watchToggle.addEventListener('change', async () => {
   const on = el.watchToggle.checked;
