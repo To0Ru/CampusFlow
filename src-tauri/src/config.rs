@@ -17,10 +17,15 @@ pub const DEFAULT_CHANNEL: &str = "中国电信";
 pub const MODE_EVENT: &str = "event";
 pub const MODE_POLL: &str = "poll";
 
-/// 启动检查：等这个校园网 SSID 出现，最多等多久（秒）
-pub const STARTUP_SSID_WAIT_SECS: u64 = 60;
-/// 启动检查的 SSID 轮询间隔（毫秒）
-pub const STARTUP_SSID_POLL_MS: u64 = 2500;
+/// 启动检查：等校园网就绪，最多等多久（秒）
+pub const STARTUP_WAIT_SECS: u64 = 60;
+/// 启动检查的轮询间隔（毫秒）
+pub const STARTUP_POLL_MS: u64 = 2500;
+
+/// 校园网内网段前缀。
+/// 校园网给设备分的地址（不管走 WiFi 还是网线）都落在这一段里，
+/// 用于「连不上门户时」兑底判断在不在校园网。
+pub const CAMPUS_IP_PREFIX: &str = "10.115.";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]

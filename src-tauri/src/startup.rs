@@ -6,13 +6,16 @@
 //! 触发条件：设置里开了「开机自启」。
 //!
 //! ```text
-//! 等 iFudan.stu 出现，最多 60 秒
-//!   ├─ 等到了 → 直接调 fixer::fix()
+//! 等校园网就绪，最多 60 秒
+//!   ├─ 就绪了 → 直接调 fixer::fix()
 //!   │            （它自己会判断公网通不通：通就不动，不通才注销/认证）
-//!   └─ 没等到 → 放弃，交给后面的机制
+//!   └─ 超时   → 放弃，交给后面的机制
 //! ```
 //!
-//! 为什么要等：开机那一刻 WiFi 往往还没连上，不等的话第一次认证必然失败。
+//! 为什么是「等校园网就绪」而不是「等 iFudan.stu」：
+//! SSID 是 WiFi 专有概念，**插网线时不存在**。旧实现会死等到超时，
+//! 导致以太网用户的开机检查完全不工作。现在改成看门户可达 + 校园网段兑底，
+//! 两种接入方式都覆盖。
 //!
 //! 另外任务 A 也会被挂在这个任务后面启动（见 `DoneHook`）——
 //! 不然任务 A 在开机瞬间就会跑一次注定失败的检查，日志里刷一堆"连门户都访问不到"。
@@ -22,7 +25,7 @@ use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
 
-use crate::config::{Config, STARTUP_SSID_WAIT_SECS};
+use crate::config::{Config, STARTUP_WAIT_SECS};
 use crate::fixer;
 use crate::logbus::LogSink;
 use crate::net;
@@ -48,19 +51,21 @@ pub fn spawn(cfg: Config, log: LogSink, busy: Arc<AtomicBool>, on_done: Option<D
 fn check(cfg: &Config, log: &LogSink, busy: &AtomicBool) {
     // 这个线程是 daemon，进程退出就没了，不需要外部来叫停
     let stop = AtomicBool::new(false);
-    let profile = cfg.profile.trim().to_string();
 
     log(&format!(
-        "[..] 启动检查：等待 {profile}（最多 {STARTUP_SSID_WAIT_SECS} 秒）…"
+        "[..] 启动检查：等待校园网就绪（最多 {STARTUP_WAIT_SECS} 秒）…"
     ));
 
-    if !net::wait_for_ssid(&profile, Duration::from_secs(STARTUP_SSID_WAIT_SECS), &stop) {
-        log(&format!(
-            "[..] {STARTUP_SSID_WAIT_SECS} 秒内没等到 {profile}，本次启动检查放弃"
-        ));
+    let (ready, why) = net::wait_for_campus(
+        &cfg.portal,
+        Duration::from_secs(STARTUP_WAIT_SECS),
+        &stop,
+    );
+    if !ready {
+        log(&format!("[..] 本次启动检查放弃：{why}"));
         return;
     }
-    log(&format!("[ok] 已连上 {profile}，交给重连流程判断"));
+    log(&format!("[ok] 校园网已就绪（{why}），交给重连流程判断"));
 
     // 直接调重连工作流。它自己第一件事就是查公网——
     // 通就什么都不做，不通才走注销/认证。这里不必再查一遍。

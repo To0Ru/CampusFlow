@@ -94,7 +94,7 @@ el.tabs.addEventListener('click', (e) => {
 /* ------------------------------------------------------------------ */
 
 function renderStatus(s) {
-  el.ssid.textContent = s.ssid || '未连接 WiFi';
+  el.ssid.textContent = s.ssid || (s.ip ? '有线连接' : '未连接');
   el.vUser.textContent = s.portal_user || s.username || '—';
   el.vIp.textContent = s.ip || '—';
   el.vOutport.textContent = s.outport || s.channel || '—';

@@ -5,6 +5,7 @@
 //! 所以必须校验返回内容，并且不要跟随跳转。
 
 use std::io::Read;
+use std::net::{IpAddr, SocketAddr, TcpStream, ToSocketAddrs, UdpSocket};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
@@ -164,42 +165,72 @@ pub fn wifi_ssid() -> Option<String> {
     None
 }
 
-/// 当前连的 WiFi 是不是目标校园网。
-///
-/// 返回 `None` 表示读不到 SSID（比如 netsh 失败）——这种情况下**不应该拦**，
-/// 否则一个读取失败就会让自动重连彻底趴窝。
-pub fn on_target_ssid(profile: &str) -> Option<bool> {
-    let want = profile.trim();
-    if want.is_empty() {
-        return None;
-    }
-    wifi_ssid().map(|s| s.eq_ignore_ascii_case(want))
+/// 把门户地址解成 `SocketAddr`。
+fn portal_socket_addr(portal: &str) -> Option<SocketAddr> {
+    let rest = portal.split("://").nth(1).unwrap_or(portal);
+    let rest = rest.split('/').next().unwrap_or(rest);
+    let (host, port) = match rest.rsplit_once(':') {
+        Some((h, p)) => (h, p.parse::<u16>().ok()?),
+        None => (rest, 80),
+    };
+    (host, port).to_socket_addrs().ok()?.next()
 }
 
-/// 等目标 SSID 出现，最多等 `timeout`。
+/// 认证门户能不能连上（TCP 通就算）。
 ///
-/// 返回 `true` = 等到了；`false` = 超时或被叫停。
-/// 启动检查用：开机后 WiFi 可能还要好几秒才连上，不等的话第一次认证必然失败。
-pub fn wait_for_ssid(profile: &str, timeout: Duration, stop: &AtomicBool) -> bool {
-    let want = profile.trim();
-    if want.is_empty() {
-        return true;
+/// 门户是校园网内网地址（`10.x`），校外访问不到——所以能连上就说明在校园网里。
+/// **这个判断跟走 WiFi 还是网线无关**。
+pub fn portal_reachable(portal: &str, timeout: Duration) -> bool {
+    match portal_socket_addr(portal) {
+        Some(addr) => TcpStream::connect_timeout(&addr, timeout).is_ok(),
+        None => false,
     }
+}
 
-    let step = Duration::from_millis(crate::config::STARTUP_SSID_POLL_MS);
+/// 去目标地址时，本机实际会用哪个源 IP。
+///
+/// 用 UDP `connect` 做一次路由查询——**它不发任何包**，只是让内核选好出口。
+/// 所以能瞬间拿到「去校园网会走哪张网卡」，不关心结果是 WiFi 还是网线。
+fn local_ip_for(addr: SocketAddr) -> Option<IpAddr> {
+    let sock = UdpSocket::bind("0.0.0.0:0").ok()?;
+    sock.connect(addr).ok()?;
+    sock.local_addr().ok().map(|a| a.ip())
+}
+
+/// 等校园网就绪（WiFi / 网线都行），最多等 `timeout`。
+///
+/// 返回 `(是否就绪, 说明)`。两条判据满足任一即可：
+///
+/// 1. **认证门户可达** —— 最强证据，能连上认证服务器
+/// 2. **去门户的源 IP 落在校园网段** —— 已拿到校园网的 DHCP 地址
+///
+/// 为什么不用 SSID：那是 WiFi 专有概念。插网线时读不到任何 SSID，
+/// 旧实现会死等到超时，导致**以太网用户的开机检查完全不工作**。
+pub fn wait_for_campus(portal: &str, timeout: Duration, stop: &AtomicBool) -> (bool, String) {
+    let step = Duration::from_millis(crate::config::STARTUP_POLL_MS);
     let mut waited = Duration::ZERO;
 
     loop {
         if stop.load(Ordering::Relaxed) {
-            return false;
+            return (false, "已取消".to_string());
         }
-        if let Some(ssid) = wifi_ssid() {
-            if ssid.eq_ignore_ascii_case(want) {
-                return true;
+
+        // 判据 1：能连上认证门户
+        if portal_reachable(portal, Duration::from_millis(1200)) {
+            return (true, "认证门户可达".to_string());
+        }
+
+        // 判据 2：兑底。门户一时抽风时，只要拿到的地址在校园网段也算就绪
+        if let Some(addr) = portal_socket_addr(portal) {
+            if let Some(ip) = local_ip_for(addr) {
+                if ip.to_string().starts_with(crate::config::CAMPUS_IP_PREFIX) {
+                    return (true, format!("已拿到校园网地址 {ip}"));
+                }
             }
         }
+
         if waited >= timeout {
-            return false;
+            return (false, format!("{} 秒内未就绪", timeout.as_secs()));
         }
         std::thread::sleep(step);
         waited += step;
