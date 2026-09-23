@@ -54,6 +54,16 @@ CampusFlow 就是为了干掉这个重复劳动：**后台常驻，掉线自动�
 3. 回「**状态**」页，把「**自动重连**」打开
 4. 就这样，之后不用再管了
 
+> 「**检查方式**」决定什么时候去检查网络：
+>
+> | | 行为 | 适合 |
+> |---|---|---|
+> | **网络变化时检查**（默认） | 换 WiFi / 休眠唤醒 / 插拔网线时立即检查，平时不发请求 | 笔记本，省电 |
+> | **定时轮询** | 每隔 N 秒主动探测一次 | 台式机，或者怕漏检 |
+>
+> ⚠️ 已知局限：校园网会话**静默过期**（AC 把会话踢了但 IP 没变）**不会**触发网络变化事件。
+> 如果你发现偶尔“明明掉了但没自动重连”，就换成定时轮询。
+
 想开机就自动跑，在设置页把「**开机自启**」也打开。
 
 > 自启写的是当前用户注册表 `HKCU\...\CurrentVersion\Run`，不需要管理员。
@@ -185,21 +195,29 @@ cargo run          # 调试模式，自动开 devtools
 
 ```
 src-tauri/src/
+├── main.rs        入口：窗口决策、两个任务的启动顺序
 ├── portal.rs      门户协议：两步认证 / 注销 / 在线查询
 ├── net.rs         联网探测（不跟随跳转，识别门户劫持）+ 读 WiFi SSID
+├── netchange.rs   Windows 网络地址变化事件（手写 FFI 调 iphlpapi）
 ├── config.rs      配置读写（%APPDATA%\CampusFlow\config.json）
-├── fixer.rs       修复编排 + 状态采集
-├── watcher.rs     后台守护线程
+├── dpapi.rs       账号密码加密（手写 FFI 调 crypt32 的 DPAPI）
+├── fixer.rs       重连编排 + 状态采集
+├── watcher.rs     任务 A：后台常驻守护
+├── startup.rs     任务 B：开机后的一次性检查
+├── window.rs      窗口创建 / 销毁（关窗即销毁，把 WebView2 的内存还回去）
 ├── logbus.rs      日志缓冲 + 事件广播
 ├── commands.rs    前端可调用的命令
 ├── tray.rs        托盘图标 + 菜单
-├── autostart.rs   开机自启（直接写注册表）
-└── main.rs        入口
+└── autostart.rs   开机自启（直接写注册表）
 
 web/               前端（纯静态，零构建，无 npm）
 ```
 
-**技术栈**：Rust + Tauri v2 · 依赖只有 `tauri` / `serde` / `ureq` / `encoding_rs`
+**技术栈**：Rust + Tauri v2 · 直接依赖只有 6 个：
+`tauri` / `serde` / `serde_json` / `ureq` / `encoding_rs` / `base64`
+
+> 所有 Win32 调用（网络变化事件、DPAPI）都是手写 `extern "system"` FFI，
+> **没有引入 `windows` crate**——那东西会明显拖慢 CI 编译、增大体积。
 
 ---
 
